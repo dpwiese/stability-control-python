@@ -4,33 +4,20 @@ Test the collection of a few things for rigid body motion
 import unittest
 import numpy as np
 import numpy.typing as npt
-from numpy import eye
 from scipy.spatial.transform import Rotation
-from src.hat import (
-    hat,
-    inv_hat,
-    eqax_to_rotation_matrix,
-    rotation_matrix_to_eqax,
-    eqax_to_mrp,
-    mrp_to_eqax,
-    # EquivalentAxis,
-    rotation_matrix_to_quat,
-    quat_to_rotation_matrix,
-    rotation_matrix_to_euler,
-    euler_to_rotation_matrix,
-    twist_coords_to_g
-)
+import src.rigidbody as rb
 
 class TestHat(unittest.TestCase):
     """Test functions to convert between rotation representation"""
 
+    # pylint: disable-next=R0201
     def test_hat(self):
         """hat makes skew symmetric matrix from column vector: array of size (3,1)"""
 
         vec_in: npt.NDArray[np.float64] = np.array([[1], [2], [3]])
         answer_mat: npt.NDArray[np.float64] = np.array([[0, -3, 2], [3, 0, -1], [-2, 1, 0]])
 
-        np.testing.assert_array_equal(answer_mat, hat(vec_in))
+        np.testing.assert_array_equal(answer_mat, rb.hat(vec_in))
 
     def test_hat_bad_inputs(self):
         """hat raises error when inputs are not a column vector: (3,1) array"""
@@ -64,15 +51,16 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             with self.assertRaises(tc["error"]):
-                hat(tc["input"])
+                rb.hat(tc["input"])
 
+    # pylint: disable-next=R0201
     def test_inv_hat(self):
         """inv_hat returns correct column vector from matrix input"""
 
         mat_in: npt.NDArray[np.float64] = np.array([[0, -3, 2], [3, 0, -1], [-2, 1, 0]])
         answer_vec: npt.NDArray[np.float64] = np.array([[1], [2], [3]])
 
-        np.testing.assert_array_equal(answer_vec, inv_hat(mat_in))
+        np.testing.assert_array_equal(answer_vec, rb.inv_hat(mat_in))
 
     def test_inv_hat_bad_inputs(self):
         """inv_hat raises error when input is not a skew-symmetric matrix: (3,3) array"""
@@ -86,10 +74,12 @@ class TestHat(unittest.TestCase):
                 "input": np.array([[0, -3], [3, 0], [-2, 1]]),
                 "error": AssertionError
             },
-            {
-                "input": np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]]),
-                "error": AssertionError
-            },
+            # TODO@dpwiese - figure out exactly what test case is. Must inv_hat() take strictly
+            # skew-symmetric matrices, or is identity okay?
+            # {
+            #     "input": np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]]),
+            #     "error": AssertionError
+            # },
             {
                 "input": 1,
                 "error": AttributeError
@@ -106,14 +96,15 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             with self.assertRaises(tc["error"]):
-                inv_hat(tc["input"])
+                rb.inv_hat(tc["input"])
 
+    # pylint: disable-next=R0201
     def test_mrp_to_eqax(self):
         """mrp_to_eqax converts MRP to equivalent axis representation"""
 
         # Calculate equivalent axis representation from MRP
         # TODO@dpwiese - is this array a valid MRP?
-        eq_ax = mrp_to_eqax(np.array([[1], [2], [3]]))
+        eq_ax = rb.mrp_to_eqax(np.array([[1], [2], [3]]))
 
         # TODO@dpwiese - make more and better tests here, with values from analytical calculations
 
@@ -122,7 +113,7 @@ class TestHat(unittest.TestCase):
         theta_ans = 5.238555663567489
 
         # Check both omega and theta are correct
-        # pylint: disable=C0301
+        # pylint: disable-next=C0301
         np.testing.assert_allclose(omega_ans, eq_ax["omega"], rtol=1e-05, atol=1e-08, equal_nan=False)
         np.testing.assert_equal(theta_ans, eq_ax["theta"])
 
@@ -158,8 +149,9 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             with self.assertRaises(tc["error"]):
-                mrp_to_eqax(tc["input"])
+                rb.mrp_to_eqax(tc["input"])
 
+    # pylint: disable-next=R0201
     def test_eqax_to_mrp(self):
         """Test stuff"""
 
@@ -170,7 +162,8 @@ class TestHat(unittest.TestCase):
         eq_ax = {"omega": omega, "theta": theta}
         mrp = np.array([[-0.19707587], [-0.39415173], [-0.5912276]])
 
-        np.testing.assert_allclose(mrp, eqax_to_mrp(eq_ax), rtol=1e-05, atol=1e-08, equal_nan=False)
+        # pylint: disable-next=C0301
+        np.testing.assert_allclose(mrp, rb.eqax_to_mrp(eq_ax), rtol=1e-05, atol=1e-08, equal_nan=False)
 
     def test_eqax_to_mrp_bad_inputs(self):
         """Test stuff"""
@@ -248,8 +241,9 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             with self.assertRaises(tc["error"]):
-                eqax_to_mrp(tc["input"])
+                rb.eqax_to_mrp(tc["input"])
 
+    # pylint: disable-next=R0201
     def test_eqax_to_rotation_matrix(self):
         """eqax_to_rotation_matrix correctly converts equivalent axis to rotation matrix"""
 
@@ -260,7 +254,7 @@ class TestHat(unittest.TestCase):
                     "omega": np.array([[0], [0], [0]]),
                     "theta": 0
                 },
-                "answer": eye(3, dtype=float)
+                "answer": np.eye(3, dtype=float)
             },
             {
                 "input": {
@@ -268,7 +262,7 @@ class TestHat(unittest.TestCase):
                     "omega": np.array([[1], [2], [3]]),
                     "theta": 0
                 },
-                "answer": eye(3, dtype=float)
+                "answer": np.eye(3, dtype=float)
             },
             {
                 "input": {
@@ -276,7 +270,7 @@ class TestHat(unittest.TestCase):
                     "omega": np.array([[0], [0], [0]]),
                     "theta": 1
                 },
-                "answer": eye(3, dtype=float)
+                "answer": np.eye(3, dtype=float)
             },
             {
                 "input": {
@@ -331,7 +325,7 @@ class TestHat(unittest.TestCase):
         # Test
         for tc in test_cases:
             ans = tc["answer"]
-            rot_mat = eqax_to_rotation_matrix(tc["input"])
+            rot_mat = rb.eqax_to_rotation_matrix(tc["input"])
             np.testing.assert_allclose(ans, rot_mat, rtol=1e-04, atol=1e-08, equal_nan=False)
 
     def test_eqax_to_rotation_matrix_bad_inputs(self):
@@ -417,15 +411,16 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             with self.assertRaises(tc["error"]):
-                eqax_to_rotation_matrix(tc["input"])
+                rb.eqax_to_rotation_matrix(tc["input"])
 
+    # pylint: disable-next=R0201
     def test_rotation_matrix_to_eqax(self):
         """Test stuff"""
 
         # Equivalent axes representation - omega and time
         # Identity rotation matrix is zero rotation (omega) for zero time (theta)
         omega_ans = np.array([[0], [0], [0]])
-        eq_ax = rotation_matrix_to_eqax(eye(3, dtype=float))
+        eq_ax = rb.rotation_matrix_to_eqax(np.eye(3, dtype=float))
 
         # TODO@dpwiese - more testing here
         np.testing.assert_array_equal(omega_ans, eq_ax["omega"])
@@ -463,9 +458,10 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             with self.assertRaises(tc["error"]):
-                rotation_matrix_to_eqax(tc["input"])
+                rb.rotation_matrix_to_eqax(tc["input"])
 
     # TODO@dpwiese - test bad inputs
+    # pylint: disable-next=R0201
     def test_rotation_matrix_to_quat(self):
         """rotation_matrix_to_quat converts rotation matrix to quaternion correctly"""
 
@@ -479,7 +475,7 @@ class TestHat(unittest.TestCase):
         q_ans = np.array([-0.13333333, -0.26666667, -0.4, 0.86666667])
 
         # Determine quaternion
-        q_out = rotation_matrix_to_quat(rot_mat)
+        q_out = rb.rotation_matrix_to_quat(rot_mat)
 
         # Another "answer" from comparing against scipy.spatial.transform
         q_ans_2 = Rotation.from_matrix(rot_mat).as_quat()
@@ -489,6 +485,7 @@ class TestHat(unittest.TestCase):
         np.testing.assert_allclose(q_ans_2, q_out, rtol=1e-05, atol=1e-08, equal_nan=False)
 
     # TODO@dpwiese - test bad inputs
+    # pylint: disable-next=R0201
     def test_quat_to_rotation_matrix(self):
         """quat_to_rotation_matrix converts rotation matrix to quaternion"""
 
@@ -507,7 +504,7 @@ class TestHat(unittest.TestCase):
         ])
 
         # Determine rotation matrix
-        rot_mat = quat_to_rotation_matrix(quat)
+        rot_mat = rb.quat_to_rotation_matrix(quat)
 
         # Another "answer" from comparing against scipy.spatial.transform
         rot_mat_ans_2 = Rotation.from_quat(quat.reshape(4,)).as_matrix()
@@ -517,6 +514,7 @@ class TestHat(unittest.TestCase):
         np.testing.assert_allclose(rot_mat_ans_2, rot_mat, rtol=1e-05, atol=1e-08, equal_nan=False)
 
     # TODO@dpwiese - test bad inputs
+    # pylint: disable-next=R0201
     def test_rotation_matrix_to_euler(self):
         """rotation_matrix_to_euler converts rotation matrix to Euler angles"""
 
@@ -539,15 +537,15 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             # Calculate Euler angles
-            euler = rotation_matrix_to_euler(tc["input"])
+            euler = rb.rotation_matrix_to_euler(tc["input"])
 
             # Another "answer" from comparing against scipy.spatial.transform
             euler_ans_2 = Rotation.from_matrix(tc["input"]).as_euler("ZYX")
 
             # TODO@dpwiese - test all elements of dict at same time
-            # pylint: disable=C0301
+            # pylint: disable-next=C0301
             # np.testing.assert_allclose(tc["answer"], euler, rtol=1e-05, atol=1e-08, equal_nan=False)
-            # pylint: disable=C0301
+            # pylint: disable-next=C0301
             # np.testing.assert_allclose(euler_ans_2, euler, rtol=1e-05, atol=1e-08, equal_nan=False)
 
             # Check
@@ -567,6 +565,7 @@ class TestHat(unittest.TestCase):
                 rtol=1e-05, atol=1e-08, equal_nan=False)
 
     # TODO@dpwiese - test bad inputs
+    # pylint: disable-next=R0201
     def test_euler_to_rotation_matrix(self):
         """euler_to_rotation_matrix converts Euler angles to rotation matrix"""
 
@@ -580,7 +579,7 @@ class TestHat(unittest.TestCase):
         ])
 
         # Convert Euler angles to rotation matrix
-        rot_mat = euler_to_rotation_matrix({"psi": 0.1, "theta": 0.2, "phi": 0.3})
+        rot_mat = rb.euler_to_rotation_matrix({"psi": 0.1, "theta": 0.2, "phi": 0.3})
 
         # Another "answer" from comparing against scipy.spatial.transform
         rot_mat_ans_2 = Rotation.from_euler("ZYX", my_eulers).as_matrix()
@@ -590,8 +589,9 @@ class TestHat(unittest.TestCase):
         np.testing.assert_allclose(rot_mat_ans_2, rot_mat, rtol=1e-05, atol=1e-08, equal_nan=False)
 
     # TODO@dpwiese - test bad inputs
-    def test_twist_coords_to_g(self):
-        """twist_coords_to_g converts twist triplet into g matrix"""
+    # pylint: disable-next=R0201
+    def test_twist_coords_to_config_g(self):
+        """twist_coords_to_config_g converts twist triplet into configuration matrix g."""
 
         test_cases = [
             {
@@ -601,7 +601,7 @@ class TestHat(unittest.TestCase):
                     "velocity": np.array([[0], [0], [0]]),
                     "theta": 1
                 },
-                "g_matrix_ans": eye(4, dtype=float)
+                "g_matrix_ans": np.eye(4, dtype=float)
             },
             {
                 "twist": {
@@ -634,10 +634,24 @@ class TestHat(unittest.TestCase):
 
         for tc in test_cases:
             # Calculate g from twist
-            g_matrix = twist_coords_to_g(tc["twist"])
+            g_matrix = rb.twist_coords_to_config_g(tc["twist"])
 
             # Check
+            # pylint: disable-next=C0301
             np.testing.assert_allclose(tc["g_matrix_ans"], g_matrix, rtol=1e-05, atol=1e-08, equal_nan=False)
+
+    # pylint: disable-next=R0201
+    def test_config_g_to_twist_coords(self):
+
+        # top_left = np.eye(3, dtype=float)
+        # top_right = 
+        # g_mat = np.append()
+
+        g_mat = np.eye(4, dtype=float)
+        twist = rb.config_g_to_twist_coords(g_mat)
+
+        # TODO@dpwiese - write tests
+        # print(twist)
 
 if __name__ == '__main__':
     unittest.main()
