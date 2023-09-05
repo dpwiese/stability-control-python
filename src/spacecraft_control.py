@@ -1,5 +1,9 @@
 """
-Stabilizing spacecraft - 16.333 HW #1
+Stabilizing spacecraft - 16.333 HW #2
+This script models the rotational dynamics of a tumbling spacecraft and designs and compares the
+performance of two controllers in regulating the vehicle state back to the origin. The state vector
+is of length 6 and includes the angular velocity about each of the body axes, and Euler angles to
+describe the vehicle's orientation. The input is torque about each of the three body axes.
 """
 
 import control
@@ -18,19 +22,18 @@ def moment_equations_state(_t, x_state, u_input, _params):
     # Calculate and return omega_b_dot
     return inv(J_B) @ ((-rb.hat(omega_b) @ J_B) @ omega_b + tau_b)
 
-def moment_equations_output(_t, x_state, u_input, _params):
+def moment_equations_output(_t, x_state, _u_input, _params):
     """Output is omega_b_dot"""
 
     # Return omega_b_dot
     return x_state
 
-def euler_equations_state(_t, x_state, u_input, _params):
+def orientation_equations_state(_t, x_state, u_input, _params):
     """State is euler angles (phi, theta, psi) input is omega_b"""
 
-    # Parse input
+    # Parse state
     phi     = x_state[0]
     theta   = x_state[1]
-    # psi     = x_state[2]
 
     # Build output
     row_1 = np.array([1, np.tan(theta) * np.sin(phi), np.tan(theta) * np.cos(phi)])
@@ -40,7 +43,7 @@ def euler_equations_state(_t, x_state, u_input, _params):
     # Calculate and return euler_dot
     return np.array([row_1, row_2, row_3]) @ u_input.reshape(3,1)
 
-def euler_equations_output(_t, x_state, u_input, _params):
+def orientation_equations_output(_t, x_state, _u_input, _params):
     """Output is time derivative of Euler angles (phi_dot, theta_dot, psi_dot)"""
 
     # Return Euler time derivatives
@@ -64,13 +67,13 @@ IO_MOMENT_EQUATIONS = control.NonlinearIOSystem(
 # Input: omega_b
 # State: euler
 # Output: euler
-IO_EULER_EQUATIONS = control.NonlinearIOSystem(
-    euler_equations_state,
-    euler_equations_output,
+IO_ORIENTATION_EQUATIONS = control.NonlinearIOSystem(
+    orientation_equations_state,
+    orientation_equations_output,
     inputs=3,
     outputs=3,
     states=3,
-    name='euler',
+    name='orientation',
     dt=0
 )
 
@@ -79,14 +82,21 @@ IO_EULER_EQUATIONS = control.NonlinearIOSystem(
 # State: [omega_b, euler]
 # Output: [omega_b, euler]
 IO_OPEN_LOOP = control.InterconnectedSystem(
-    (IO_MOMENT_EQUATIONS, IO_EULER_EQUATIONS),
+    (IO_MOMENT_EQUATIONS, IO_ORIENTATION_EQUATIONS),
     connections=(
-        ('euler.u[0]', 'moment.y[0]'),
-        ('euler.u[1]', 'moment.y[1]'),
-        ('euler.u[2]', 'moment.y[2]')
+        ('orientation.u[0]', 'moment.y[0]'),
+        ('orientation.u[1]', 'moment.y[1]'),
+        ('orientation.u[2]', 'moment.y[2]')
     ),
     inplist=('moment.u[0]', 'moment.u[1]', 'moment.u[2]'),
-    outlist=('moment.y[0]', 'moment.y[1]', 'moment.y[2]', 'euler.y[0]', 'euler.y[1]', 'euler.y[2]'),
+    outlist=(
+        'moment.y[0]',
+        'moment.y[1]',
+        'moment.y[2]',
+        'orientation.y[0]',
+        'orientation.y[1]',
+        'orientation.y[2]'
+    ),
     dt=0
 )
 
@@ -94,10 +104,13 @@ IO_OPEN_LOOP = control.InterconnectedSystem(
 J_B = np.array([[1, 0, 0], [0, 2, 0], [0, 0, 5]])
 
 # Equilibrium point about which to linearize
-# R_EQ = np.eye(3, dtype=float)
-# R_D = R_EQ
+# TODO@dpwiese - resolve redundancy in specifying both R_EQ and X_EQ
+R_EQ = np.eye(3, dtype=float)
 X_EQ = np.zeros(6)
 U_EQ = np.zeros(3)
+
+# Rotation matrix that describes rotation matrix from inertial frame to desired orientation
+R_D = R_EQ
 
 # Linearize nonlinear spacecraft dynamics
 linsys = control.linearize(IO_OPEN_LOOP, X_EQ, U_EQ)
@@ -125,13 +138,13 @@ IO_LINEAR_CONTROL = control.LinearIOSystem(
     name='linear_control'
 )
 
-def nonlinear_controller_state(_t, x_state, u_input, _params):
+def nonlinear_controller_state(_t, x_state, _u_input, _params):
     """Controller doesn't have internal state, input is plant state"""
 
     # Calculate and return the controller state, it won't be used anyway
     return x_state
 
-def nonlinear_controller_output(_t, x_state, u_input, _params):
+def nonlinear_controller_output(_t, _x_state, u_input, _params):
     """Input is the plant state, controller doesn't have state, output is tau_b"""
 
     # Parse input to get omega
@@ -140,20 +153,17 @@ def nonlinear_controller_output(_t, x_state, u_input, _params):
     # pylint: disable-next=C0301
     rot_mat = rb.euler_to_rotation_matrix({"phi": u_input[3], "theta": u_input[4], "psi": u_input[5]})
     omega_d = np.zeros((3,1))
-    R_D = np.eye(3, dtype=float)
+    rot_mat_d = np.eye(3, dtype=float)
 
     # Get velocity and proportional parts of gain
-    K_V = K[:, :3]
-    K_P = K[:, 3:]
+    kv_gain = K[:, :3]
+    kp_gain = K[:, 3:]
 
-    term_1 = -np.transpose(rb.inv_hat(K_P @ np.transpose(R_D) @ rot_mat))
-    term_2 = -K_V @ (omega - rot_mat @ np.transpose(R_D) @ omega_d)
-
-    # pylint: disable-next=C0301
-    tau_b = term_1.reshape(3,1) + term_2
+    term_1 = -np.transpose(rb.inv_hat(kp_gain @ np.transpose(rot_mat_d) @ rot_mat))
+    term_2 = -kv_gain @ (omega - rot_mat @ np.transpose(rot_mat_d) @ omega_d)
 
     # Return control
-    return tau_b
+    return term_1.reshape(3,1) + term_2
 
 # System parameters: moment equations
 # Input: tau_b
@@ -174,23 +184,30 @@ IO_NONLINEAR_CONTROL = control.NonlinearIOSystem(
 # State: [omega_b, euler]
 # Output: [omega_b, euler]
 IO_CLOSED_LOOP_LINEAR = control.InterconnectedSystem(
-    (IO_MOMENT_EQUATIONS, IO_EULER_EQUATIONS, IO_LINEAR_CONTROL),
+    (IO_MOMENT_EQUATIONS, IO_ORIENTATION_EQUATIONS, IO_LINEAR_CONTROL),
     connections=(
-        ('euler.u[0]',          'moment.y[0]'),
-        ('euler.u[1]',          'moment.y[1]'),
-        ('euler.u[2]',          'moment.y[2]'),
+        ('orientation.u[0]',    'moment.y[0]'),
+        ('orientation.u[1]',    'moment.y[1]'),
+        ('orientation.u[2]',    'moment.y[2]'),
         ('moment.u[0]',         'linear_control.y[0]'),
         ('moment.u[1]',         'linear_control.y[1]'),
         ('moment.u[2]',         'linear_control.y[2]'),
         ('linear_control.u[0]', 'moment.y[0]'),
         ('linear_control.u[1]', 'moment.y[1]'),
         ('linear_control.u[2]', 'moment.y[2]'),
-        ('linear_control.u[3]', 'euler.y[0]'),
-        ('linear_control.u[4]', 'euler.y[1]'),
-        ('linear_control.u[5]', 'euler.y[2]'),
+        ('linear_control.u[3]', 'orientation.y[0]'),
+        ('linear_control.u[4]', 'orientation.y[1]'),
+        ('linear_control.u[5]', 'orientation.y[2]'),
     ),
     inplist=(),
-    outlist=('moment.y[0]', 'moment.y[1]', 'moment.y[2]', 'euler.y[0]', 'euler.y[1]', 'euler.y[2]'),
+    outlist=(
+        'moment.y[0]',
+        'moment.y[1]',
+        'moment.y[2]',
+        'orientation.y[0]',
+        'orientation.y[1]',
+        'orientation.y[2]'
+    ),
     dt=0
 )
 
@@ -199,23 +216,30 @@ IO_CLOSED_LOOP_LINEAR = control.InterconnectedSystem(
 # State: [omega_b, euler]
 # Output: [omega_b, euler]
 IO_CLOSED_LOOP_NONLINEAR = control.InterconnectedSystem(
-    (IO_MOMENT_EQUATIONS, IO_EULER_EQUATIONS, IO_NONLINEAR_CONTROL),
+    (IO_MOMENT_EQUATIONS, IO_ORIENTATION_EQUATIONS, IO_NONLINEAR_CONTROL),
     connections=(
-        ('euler.u[0]',              'moment.y[0]'),
-        ('euler.u[1]',              'moment.y[1]'),
-        ('euler.u[2]',              'moment.y[2]'),
+        ('orientation.u[0]',        'moment.y[0]'),
+        ('orientation.u[1]',        'moment.y[1]'),
+        ('orientation.u[2]',        'moment.y[2]'),
         ('moment.u[0]',             'nonlinear_control.y[0]'),
         ('moment.u[1]',             'nonlinear_control.y[1]'),
         ('moment.u[2]',             'nonlinear_control.y[2]'),
         ('nonlinear_control.u[0]',  'moment.y[0]'),
         ('nonlinear_control.u[1]',  'moment.y[1]'),
         ('nonlinear_control.u[2]',  'moment.y[2]'),
-        ('nonlinear_control.u[3]',  'euler.y[0]'),
-        ('nonlinear_control.u[4]',  'euler.y[1]'),
-        ('nonlinear_control.u[5]',  'euler.y[2]'),
+        ('nonlinear_control.u[3]',  'orientation.y[0]'),
+        ('nonlinear_control.u[4]',  'orientation.y[1]'),
+        ('nonlinear_control.u[5]',  'orientation.y[2]'),
     ),
     inplist=(),
-    outlist=('moment.y[0]', 'moment.y[1]', 'moment.y[2]', 'euler.y[0]', 'euler.y[1]', 'euler.y[2]'),
+    outlist=(
+        'moment.y[0]',
+        'moment.y[1]',
+        'moment.y[2]',
+        'orientation.y[0]',
+        'orientation.y[1]',
+        'orientation.y[2]'
+    ),
     dt=0
 )
 
