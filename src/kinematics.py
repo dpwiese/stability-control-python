@@ -56,6 +56,8 @@ def run_kinematics_analytic():
     print(p_0_i)
     print(p_4_i)
 
+    # TODO@dpwiese - return stuff here to plot
+
 def kinematics_body(t_0, t_f, omega_b, v_b, dt, rot_i_b, delta):
     """Kinematics"""
 
@@ -159,6 +161,8 @@ def run_kinematics_body():
 
     print(delta_out4[-1])
 
+    # TODO@dpwiese - return stuff here to plot
+
 # pylint: disable-next=C0301
 def wrenchint(t_0, t_f, dt, j_b, mass, omega_b_0, v_b_0, tau_b_0, f_b_0, rot_i_b_0, gbar, delta_i_b_0):
     """Wrench"""
@@ -244,7 +248,6 @@ def run_wrenchint():
     time    = np.linspace(t_0, t_f, nt)
 
     # Constants
-    # j_b         = np.array([[1, 0, 0], [0, 2, 0], [0, 0, 2]])
     j_b         = np.array([[1, 0, 0], [0, 2, 0], [0, 0, 5]])
     mass        = 1
     gbar        = np.array([0, 0, 0]).reshape(3,1)
@@ -287,3 +290,5 @@ if __name__ == "__main__":
     run_kinematics_analytic()
     run_kinematics_body()
     run_wrenchint()
+
+    # TODO@dpwiese - get return values from the above and plot here

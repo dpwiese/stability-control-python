@@ -33,6 +33,7 @@ python3 -m unittest
 # Run
 python3 ./src/rigidbody.py
 python3 ./src/kinematics.py
+python3 ./src/glider_control.py
 ```
 
 # Rotation Stuff
