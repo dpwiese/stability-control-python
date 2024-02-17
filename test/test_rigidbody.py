@@ -7,7 +7,7 @@ import numpy.typing as npt
 from scipy.spatial.transform import Rotation
 import src.rigidbody as rb
 
-class TestHat(unittest.TestCase):
+class TestRigidbody(unittest.TestCase):
     """Test functions to convert between rotation representation"""
 
     # pylint: disable-next=R0201

@@ -1,4 +1,4 @@
-# TBD
+# Stability Control Python
 
 ```sh
 # Set local python version to that specified by .python-version
@@ -46,3 +46,7 @@ By making the vector a unit vector, we lose information.
 So the "direction" of rotation can be specified by where the vector points, and the magnitude of rotation can be specified by the length of the vector, assumed to be a constant angular velocity over a unit time.
 
 Equivalent axis representation should have unit vector, but it need not??
+
+# References
+
+[pytransform3d: SO(3): 3D Rotations](https://dfki-ric.github.io/pytransform3d/rotations.html#modified-rodrigues-parameters)
